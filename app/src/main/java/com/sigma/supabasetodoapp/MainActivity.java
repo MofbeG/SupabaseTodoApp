@@ -10,13 +10,9 @@ import android.view.View;
 import android.widget.EditText;
 import android.widget.Toast;
 
-import androidx.activity.EdgeToEdge;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
-import androidx.core.graphics.Insets;
-import androidx.core.view.ViewCompat;
-import androidx.core.view.WindowInsetsCompat;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -81,6 +77,8 @@ public class MainActivity extends AppCompatActivity {
         });
 
         findViewById(R.id.fabAdd).setOnClickListener(v -> showAddDialog());
+
+        findViewById(R.id.btnLogout).setOnClickListener(v -> logout());
 
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
@@ -508,4 +506,11 @@ public class MainActivity extends AppCompatActivity {
         br.close();
         return sb.toString();
     }
+
+    private void logout() {
+        prefs.edit().clear().apply();
+        startActivity(new Intent(this, LoginActivity.class));
+        finish();
+    }
+
 }
