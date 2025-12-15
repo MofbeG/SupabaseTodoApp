@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="12dp">
+
+    <TextView
+        android:id="@+id/tvGoalText"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Цель"
+        android:textStyle="bold"
+        android:textSize="16sp"/>
+
+    <TextView
+        android:id="@+id/tvDesiredResult"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Результат: 0"/>
+
+    <TextView
+        android:id="@+id/tvTargetDate"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Дата: 2025-12-31"/>
+</LinearLayout>
