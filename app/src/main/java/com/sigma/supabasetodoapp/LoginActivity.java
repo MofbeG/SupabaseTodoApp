@@ -15,6 +15,7 @@ import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowInsetsCompat;
 
 import com.sigma.supabasetodoapp.network.SupabaseConfig;
+import com.google.android.material.textfield.TextInputEditText;
 
 import org.json.JSONObject;
 
@@ -34,7 +35,7 @@ public class LoginActivity extends AppCompatActivity {
     private ExecutorService networkExecutor;
     private Handler mainHandler;
 
-    private EditText etEmail, etPassword;
+    private TextInputEditText etEmail, etPassword;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -42,13 +43,13 @@ public class LoginActivity extends AppCompatActivity {
         setContentView(R.layout.activity_login);
 
         etEmail = findViewById(R.id.emailEditText);
-        etPassword = findViewById(R.id.passwordInputLayout);
+        etPassword = findViewById(R.id.passwordEditText);
 
         networkExecutor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
 
-        findViewById(R.id.btnSignup).setOnClickListener(v -> signUp());
-        findViewById(R.id.btnSignin).setOnClickListener(v -> signIn());
+        findViewById(R.id.signUpButton).setOnClickListener(v -> signUp());
+        findViewById(R.id.signInButton).setOnClickListener(v -> signIn());
     }
 
     private void signUp() {
