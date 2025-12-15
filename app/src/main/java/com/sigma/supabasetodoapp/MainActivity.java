@@ -35,10 +35,12 @@ import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Calendar;
+import java.util.Date;
 import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.ExecutorService;
@@ -66,6 +68,18 @@ public class MainActivity extends AppCompatActivity {
         adapter = new GoalAdapter();
         rvGoals.setAdapter(adapter);
 
+        adapter.setListener(new GoalAdapter.OnGoalActionListener() {
+            @Override
+            public void onDelete(PersonalGoal goal) {
+                confirmDelete(goal);
+            }
+
+            @Override
+            public void onEdit(PersonalGoal goal) {
+                showEditDialog(goal);
+            }
+        });
+
         findViewById(R.id.fabAdd).setOnClickListener(v -> showAddDialog());
 
         executor = Executors.newSingleThreadExecutor();
@@ -78,6 +92,205 @@ public class MainActivity extends AppCompatActivity {
         }
 
         loadGoals(token);
+    }
+    private void confirmDelete(PersonalGoal goal) {
+        new AlertDialog.Builder(this)
+                .setTitle("Удалить цель?")
+                .setMessage(goal.getGoalText())
+                .setPositiveButton("Удалить", (d, w) -> deleteGoal(goal))
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void deleteGoal(PersonalGoal goal) {
+        String token = prefs.getString("access_token", null);
+        if (token == null) { goToLogin(); return; }
+
+        executor.execute(() -> {
+            HttpURLConnection c = null;
+            try {
+                String urlStr = SupabaseConfig.TABLE_URL + "?id=eq." + URLEncoder.encode(goal.getId(), "UTF-8");
+                URL url = new URL(urlStr);
+
+                c = (HttpURLConnection) url.openConnection();
+                c.setRequestMethod("DELETE");
+                c.setConnectTimeout(7000);
+                c.setReadTimeout(7000);
+
+                c.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
+                c.setRequestProperty("Authorization", "Bearer " + token);
+
+                int code = c.getResponseCode();
+                readStream(c, code);
+
+                if (code == 204 || code == 200) {
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Удалено", Toast.LENGTH_SHORT).show();
+                        loadGoals(token);
+                    });
+                } else if (code == 401) {
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Сессия истекла, войдите снова", Toast.LENGTH_LONG).show();
+                        prefs.edit().clear().apply();
+                        goToLogin();
+                    });
+                } else {
+                    mainHandler.post(() ->
+                            Toast.makeText(this, "Ошибка удаления: " + code, Toast.LENGTH_LONG).show()
+                    );
+                }
+            } catch (Exception e) {
+                mainHandler.post(() ->
+                        Toast.makeText(this, "Сетевая ошибка при удалении", Toast.LENGTH_LONG).show()
+                );
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        });
+    }
+
+    private void showEditDialog(PersonalGoal goal) {
+        View view = getLayoutInflater().inflate(R.layout.dialog_add_goal, null);
+
+        EditText etGoalText = view.findViewById(R.id.etGoalText);
+        EditText etDesiredResult = view.findViewById(R.id.etDesiredResult);
+        EditText etTargetDate = view.findViewById(R.id.etTargetDate);
+
+        etGoalText.setText(goal.getGoalText());
+        etDesiredResult.setText(String.valueOf(goal.getDesiredResult()));
+
+        final String[] selectedIsoDate = { goal.getTargetDate() };
+
+        if (goal.getTargetDate() != null) {
+            try {
+                SimpleDateFormat iso = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+                SimpleDateFormat ru = new SimpleDateFormat("dd.MM.yyyy", new Locale("ru"));
+                Date d = iso.parse(goal.getTargetDate());
+                etTargetDate.setText(ru.format(d));
+            } catch (Exception ignored) {}
+        }
+
+        etTargetDate.setOnClickListener(v -> {
+            Calendar cal = Calendar.getInstance();
+            if (selectedIsoDate[0] != null) {
+                try {
+                    Date parsed = new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(selectedIsoDate[0]);
+                    cal.setTime(parsed);
+                } catch (Exception ignored) {}
+            }
+
+            new DatePickerDialog(
+                    this,
+                    (dp, year, month, day) -> {
+                        Calendar picked = Calendar.getInstance();
+                        picked.set(year, month, day);
+
+                        SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+                        SimpleDateFormat uiFormat = new SimpleDateFormat("dd.MM.yyyy", new Locale("ru"));
+
+                        selectedIsoDate[0] = isoFormat.format(picked.getTime());
+                        etTargetDate.setText(uiFormat.format(picked.getTime()));
+                    },
+                    cal.get(Calendar.YEAR),
+                    cal.get(Calendar.MONTH),
+                    cal.get(Calendar.DAY_OF_MONTH)
+            ).show();
+        });
+
+        new AlertDialog.Builder(this)
+                .setTitle("Редактировать цель")
+                .setView(view)
+                .setPositiveButton("Сохранить", (d, w) -> {
+                    String text = etGoalText.getText().toString().trim();
+                    String desiredStr = etDesiredResult.getText().toString().trim();
+
+                    if (text.isEmpty() || desiredStr.isEmpty()) {
+                        Toast.makeText(this, "Заполни цель и результат", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    double desired;
+                    try { desired = Double.parseDouble(desiredStr); }
+                    catch (NumberFormatException e) {
+                        Toast.makeText(this, "Результат должен быть числом", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    updateGoal(goal.getId(), text, desired, selectedIsoDate[0]);
+                })
+                .setNeutralButton("Сбросить дату", (d, w) -> updateGoal(goal.getId(),
+                        etGoalText.getText().toString().trim(),
+                        parseDoubleSafe(etDesiredResult.getText().toString().trim()),
+                        null))
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private double parseDoubleSafe(String s) {
+        try { return Double.parseDouble(s); } catch (Exception e) { return 0; }
+    }
+
+    private void updateGoal(String id, String goalText, double desiredResult, @Nullable String targetDateIso) {
+        String token = prefs.getString("access_token", null);
+        String userId = prefs.getString("user_id", null);
+        if (token == null || userId == null) { goToLogin(); return; }
+
+        executor.execute(() -> {
+            HttpURLConnection c = null;
+            try {
+                String urlStr = SupabaseConfig.TABLE_URL + "?id=eq." + URLEncoder.encode(id, "UTF-8");
+                URL url = new URL(urlStr);
+
+                c = (HttpURLConnection) url.openConnection();
+                c.setRequestMethod("PATCH");
+                c.setConnectTimeout(7000);
+                c.setReadTimeout(7000);
+
+                c.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
+                c.setRequestProperty("Authorization", "Bearer " + token);
+                c.setRequestProperty("Content-Type", "application/json");
+                c.setRequestProperty("Prefer", "return=minimal");
+                c.setDoOutput(true);
+
+                JSONObject body = new JSONObject();
+                body.put("goal_text", goalText);
+                body.put("desired_result", desiredResult);
+
+                if (targetDateIso == null) body.put("target_date", JSONObject.NULL);
+                else body.put("target_date", targetDateIso);
+
+                try (OutputStream os = c.getOutputStream()) {
+                    os.write(body.toString().getBytes(StandardCharsets.UTF_8));
+                }
+
+                int code = c.getResponseCode();
+                readStream(c, code);
+
+                if (code == 204 || code == 200) {
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Сохранено", Toast.LENGTH_SHORT).show();
+                        loadGoals(token);
+                    });
+                } else if (code == 401) {
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Сессия истекла, войдите снова", Toast.LENGTH_LONG).show();
+                        prefs.edit().clear().apply();
+                        goToLogin();
+                    });
+                } else {
+                    mainHandler.post(() ->
+                            Toast.makeText(this, "Ошибка обновления: " + code, Toast.LENGTH_LONG).show()
+                    );
+                }
+
+            } catch (Exception e) {
+                mainHandler.post(() ->
+                        Toast.makeText(this, "Сетевая ошибка при обновлении", Toast.LENGTH_LONG).show()
+                );
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        });
     }
 
     private void showAddDialog() {
@@ -134,8 +347,9 @@ public class MainActivity extends AppCompatActivity {
                         return;
                     }
 
-                    // target_date можно оставить пустым
-                    if (targetDate.isEmpty()) targetDate = null;
+                    if (targetDate == null || targetDate.isEmpty()) {
+                        targetDate = null;
+                    }
 
                     addGoal(goalText, desired, targetDate);
                 })
