@@ -63,16 +63,16 @@ Android-приложение на Java для управления личным�
 ## Скриншоты
 
 ### Экран авторизации
-![Login](img/Screenshot_1.png)
+![Login](img/Screenshot_4.png)
 
 ### Список целей
-![List](img/Screenshot_2.png)
+![List](img/Screenshot_1.png)
 
 ### Добавление цели
-![Add goal](img/Screenshot_3.png)
+![Add goal](img/Screenshot_2.png)
 
 ### Выбор даты
-![DatePicker](img/Screenshot_4.png)
+![DatePicker](img/Screenshot_3.png)
 
 ---
 
