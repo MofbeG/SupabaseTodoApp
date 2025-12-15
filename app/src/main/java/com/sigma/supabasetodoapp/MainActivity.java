@@ -78,7 +78,7 @@ public class MainActivity extends AppCompatActivity {
 
         findViewById(R.id.fabAdd).setOnClickListener(v -> showAddDialog());
 
-        findViewById(R.id.btnLogout).setOnClickListener(v -> logout());
+        findViewById(R.id.btnLogout).setOnClickListener(v -> confirmLogout());
 
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
@@ -505,6 +505,19 @@ public class MainActivity extends AppCompatActivity {
         while ((line = br.readLine()) != null) sb.append(line);
         br.close();
         return sb.toString();
+    }
+
+    private void confirmLogout() {
+        new AlertDialog.Builder(this)
+                .setTitle("Выход из аккаунта")
+                .setMessage("Вы действительно хотите выйти?")
+                .setPositiveButton("Выйти", (d, w) -> {
+                    prefs.edit().clear().apply();
+                    startActivity(new Intent(this, LoginActivity.class));
+                    finish();
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
     }
 
     private void logout() {
