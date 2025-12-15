@@ -5,9 +5,13 @@ import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.view.View;
+import android.widget.EditText;
 import android.widget.Toast;
 
 import androidx.activity.EdgeToEdge;
+import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
@@ -27,8 +31,10 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -56,6 +62,8 @@ public class MainActivity extends AppCompatActivity {
         adapter = new GoalAdapter();
         rvGoals.setAdapter(adapter);
 
+        findViewById(R.id.fabAdd).setOnClickListener(v -> showAddDialog());
+
         executor = Executors.newSingleThreadExecutor();
         mainHandler = new Handler(Looper.getMainLooper());
 
@@ -66,6 +74,111 @@ public class MainActivity extends AppCompatActivity {
         }
 
         loadGoals(token);
+    }
+
+    private void showAddDialog() {
+        View view = getLayoutInflater().inflate(R.layout.dialog_add_goal, null);
+
+        EditText etGoalText = view.findViewById(R.id.etGoalText);
+        EditText etDesiredResult = view.findViewById(R.id.etDesiredResult);
+        EditText etTargetDate = view.findViewById(R.id.etTargetDate);
+
+        new AlertDialog.Builder(this)
+                .setTitle("Добавить цель")
+                .setView(view)
+                .setPositiveButton("Добавить", (d, which) -> {
+                    String goalText = etGoalText.getText().toString().trim();
+                    String desiredStr = etDesiredResult.getText().toString().trim();
+                    String targetDate = etTargetDate.getText().toString().trim();
+
+                    if (goalText.isEmpty() || desiredStr.isEmpty()) {
+                        Toast.makeText(this, "Заполни цель и результат", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    double desired;
+                    try {
+                        desired = Double.parseDouble(desiredStr);
+                    } catch (NumberFormatException e) {
+                        Toast.makeText(this, "Результат должен быть числом", Toast.LENGTH_LONG).show();
+                        return;
+                    }
+
+                    // target_date можно оставить пустым
+                    if (targetDate.isEmpty()) targetDate = null;
+
+                    addGoal(goalText, desired, targetDate);
+                })
+                .setNegativeButton("Отмена", null)
+                .show();
+    }
+
+    private void addGoal(String goalText, double desiredResult, @Nullable String targetDate) {
+        String token = prefs.getString("access_token", null);
+        String userId = prefs.getString("user_id", null);
+
+        if (token == null || userId == null) {
+            goToLogin();
+            return;
+        }
+
+        executor.execute(() -> {
+            HttpURLConnection c = null;
+            try {
+                URL url = new URL(SupabaseConfig.TABLE_URL);
+                c = (HttpURLConnection) url.openConnection();
+                c.setRequestMethod("POST");
+                c.setConnectTimeout(7000);
+                c.setReadTimeout(7000);
+
+                c.setRequestProperty("apikey", SupabaseConfig.SUPABASE_ANON_KEY);
+                c.setRequestProperty("Authorization", "Bearer " + token);
+                c.setRequestProperty("Content-Type", "application/json");
+                c.setRequestProperty("Prefer", "return=minimal");
+                c.setDoOutput(true);
+
+                JSONObject body = new JSONObject();
+                body.put("user_id", userId);
+                body.put("goal_text", goalText);
+                body.put("desired_result", desiredResult);
+                if (targetDate == null) body.put("target_date", JSONObject.NULL);
+                else body.put("target_date", targetDate);
+
+                JSONArray arr = new JSONArray();
+                arr.put(body);
+
+                try (OutputStream os = c.getOutputStream()) {
+                    os.write(arr.toString().getBytes(StandardCharsets.UTF_8));
+                }
+
+                int code = c.getResponseCode();
+                String resp = readStream(c, code);
+
+                if (code == 201) {
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Цель добавлена", Toast.LENGTH_SHORT).show();
+                        loadGoals(token);
+                    });
+                } else if (code == 401) {
+                    mainHandler.post(() -> {
+                        Toast.makeText(this, "Сессия истекла, войдите снова", Toast.LENGTH_LONG).show();
+                        prefs.edit().clear().apply();
+                        goToLogin();
+                    });
+                } else {
+                    mainHandler.post(() ->
+                            Toast.makeText(this, "Ошибка добавления: " + code, Toast.LENGTH_LONG).show()
+                    );
+                }
+
+            } catch (Exception e) {
+                mainHandler.post(() ->
+                        Toast.makeText(this, "Сетевая ошибка при добавлении", Toast.LENGTH_LONG).show()
+                );
+            } finally {
+                if (c != null) c.disconnect();
+            }
+        });
     }
 
     private void goToLogin() {
