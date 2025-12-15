@@ -1,5 +1,6 @@
 package com.sigma.supabasetodoapp;
 
+import android.app.DatePickerDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.Bundle;
@@ -35,8 +36,11 @@ import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -83,13 +87,39 @@ public class MainActivity extends AppCompatActivity {
         EditText etDesiredResult = view.findViewById(R.id.etDesiredResult);
         EditText etTargetDate = view.findViewById(R.id.etTargetDate);
 
+        final String[] selectedIsoDate = {null};
+
+        etTargetDate.setOnClickListener(v -> {
+            Calendar cal = Calendar.getInstance();
+
+            new DatePickerDialog(
+                    this,
+                    (view1, year, month, dayOfMonth) -> {
+                        Calendar picked = Calendar.getInstance();
+                        picked.set(year, month, dayOfMonth);
+
+                        SimpleDateFormat isoFormat =
+                                new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+
+                        SimpleDateFormat uiFormat =
+                                new SimpleDateFormat("dd.MM.yyyy", new Locale("ru"));
+
+                        selectedIsoDate[0] = isoFormat.format(picked.getTime());
+                        etTargetDate.setText(uiFormat.format(picked.getTime()));
+                    },
+                    cal.get(Calendar.YEAR),
+                    cal.get(Calendar.MONTH),
+                    cal.get(Calendar.DAY_OF_MONTH)
+            ).show();
+        });
+
         new AlertDialog.Builder(this)
                 .setTitle("Добавить цель")
                 .setView(view)
                 .setPositiveButton("Добавить", (d, which) -> {
                     String goalText = etGoalText.getText().toString().trim();
                     String desiredStr = etDesiredResult.getText().toString().trim();
-                    String targetDate = etTargetDate.getText().toString().trim();
+                    String targetDate = selectedIsoDate[0];
 
                     if (goalText.isEmpty() || desiredStr.isEmpty()) {
                         Toast.makeText(this, "Заполни цель и результат", Toast.LENGTH_LONG).show();

@@ -11,8 +11,11 @@ import androidx.recyclerview.widget.RecyclerView;
 import com.sigma.supabasetodoapp.R;
 import com.sigma.supabasetodoapp.models.PersonalGoal;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public class GoalAdapter extends RecyclerView.Adapter<GoalAdapter.GoalVH> {
 
@@ -31,7 +34,21 @@ public class GoalAdapter extends RecyclerView.Adapter<GoalAdapter.GoalVH> {
         PersonalGoal g = goals.get(position);
         h.tvGoalText.setText(g.getGoalText());
         h.tvDesiredResult.setText("Результат: " + g.getDesiredResult());
-        h.tvTargetDate.setText("Дата: " + (g.getTargetDate() == null ? "-" : g.getTargetDate()));
+        if (g.getTargetDate() != null) {
+            try {
+                SimpleDateFormat iso =
+                        new SimpleDateFormat("yyyy-MM-dd", Locale.US);
+                SimpleDateFormat ru =
+                        new SimpleDateFormat("dd.MM.yyyy", new Locale("ru"));
+
+                Date d = iso.parse(g.getTargetDate());
+                h.tvTargetDate.setText("Дата: " + ru.format(d));
+            } catch (Exception e) {
+                h.tvTargetDate.setText("Дата: " + g.getTargetDate());
+            }
+        } else {
+            h.tvTargetDate.setText("Дата: —");
+        }
     }
 
     @Override
